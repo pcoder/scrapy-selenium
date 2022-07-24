@@ -29,7 +29,7 @@ class SeleniumMiddleware:
     default_proxy = ''
 
     def __init__(self, driver_name: str, driver_executable_path: str, driver_arguments: Iterable[str],
-        browser_executable_path: str, max_concurrent_driver: int=8):
+        browser_executable_path: str, max_concurrent_driver: int=8, command_executor: str):
         """Initialize the selenium webdriver
 
         Parameters
@@ -44,6 +44,8 @@ class SeleniumMiddleware:
             The path of the executable binary of the browser
         max_concurrent_driver: str
             The maximal numnber of concurrent driver to be held
+        command_executor: str
+            Selenium remote server endpoint
         """
 
         webdriver_base_path = f'selenium.webdriver.{driver_name}'
@@ -55,6 +57,7 @@ class SeleniumMiddleware:
         driver_options_klass = getattr(driver_options_module, 'Options')
 
         driver_options = driver_options_klass()
+
         if browser_executable_path:
             driver_options.binary_location = browser_executable_path
         for argument in driver_arguments:
@@ -85,20 +88,24 @@ class SeleniumMiddleware:
         driver_name = crawler.settings.get('SELENIUM_DRIVER_NAME')
         driver_executable_path = crawler.settings.get('SELENIUM_DRIVER_EXECUTABLE_PATH')
         browser_executable_path = crawler.settings.get('SELENIUM_BROWSER_EXECUTABLE_PATH')
+        command_executor = crawler.settings.get('SELENIUM_COMMAND_EXECUTOR')
         driver_arguments = crawler.settings.get('SELENIUM_DRIVER_ARGUMENTS')
         max_concurrent_driver = crawler.settings.get('SELENIUM_DRIVER_MAX_CONCURRENT')
 
-        if not driver_name or not driver_executable_path:
-            raise NotConfigured(
-                'SELENIUM_DRIVER_NAME and SELENIUM_DRIVER_EXECUTABLE_PATH must be set'
-            )
+        if driver_name is None:
+            raise NotConfigured('SELENIUM_DRIVER_NAME must be set')
+
+        if driver_executable_path is None and command_executor is None:
+            raise NotConfigured('Either SELENIUM_DRIVER_EXECUTABLE_PATH '
+                                'or SELENIUM_COMMAND_EXECUTOR must be set')
 
         middleware = cls(
             driver_name=driver_name,
             driver_executable_path=driver_executable_path,
-            driver_arguments=driver_arguments,
             browser_executable_path=browser_executable_path,
-            max_concurrent_driver=max_concurrent_driver
+            max_concurrent_driver=max_concurrent_driver,
+            command_executor=command_executor,
+            driver_arguments=driver_arguments
         )
 
         crawler.signals.connect(middleware.spider_closed, signals.spider_closed)
@@ -119,7 +126,7 @@ class SeleniumMiddleware:
         return self.drivers[request.meta.get('proxy', self.default_proxy)]
 
         for cookie_name, cookie_value in request.cookies.items():
-            driver.add_cookie(
+            self.driver.add_cookie(
                 {
                     'name': cookie_name,
                     'value': cookie_value
@@ -127,23 +134,23 @@ class SeleniumMiddleware:
             )
 
         if request.wait_until:
-            WebDriverWait(driver, request.wait_time).until(
+            WebDriverWait(self.driver, request.wait_time).until(
                 request.wait_until
             )
 
         if request.screenshot:
-            request.meta['screenshot'] = driver.get_screenshot_as_png()
+            request.meta['screenshot'] = self.driver.get_screenshot_as_png()
 
         if request.script:
-            driver.execute_script(request.script)
+            self.driver.execute_script(request.script)
 
-        body = str.encode(driver.page_source)
+        body = str.encode(self.driver.page_source)
 
         # Expose the driver via the "meta" attribute
-        request.meta.update({'driver': driver})
+        request.meta.update({'driver': self.driver})
 
         return HtmlResponse(
-            driver.current_url,
+            self.driver.current_url,
             body=body,
             encoding='utf-8',
             request=request
@@ -152,5 +159,5 @@ class SeleniumMiddleware:
     def spider_closed(self):
         """Shutdown the driver when spider is closed"""
 
-        self.drivers.clear()
+        self.drivers.quit()
 
