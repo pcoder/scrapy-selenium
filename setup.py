@@ -22,8 +22,14 @@ def get_requirements(source):
     """
 
     install_reqs = parse_requirements(filename=source, session=PipSession())
+    
+    requirements = list(requirements)
+    try:
+        requirements = [str(ir.req) for ir in install_reqs]
+    except:
+        requirements = [str(ir.requirement) for ir in install_reqs]
 
-    return [str(ir.req) for ir in install_reqs]
+    return requirements
 
 
 setup(
