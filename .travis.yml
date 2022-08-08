@@ -1,3 +1,7 @@
+dist: xenial
+services:
+  - xvfb
+
 env:
   global:
   - CODECLIMATE_REPO_TOKEN=a47935830d841ad61a6e960be8a3b6a5e557146ac010dafa993e61bf82898472
