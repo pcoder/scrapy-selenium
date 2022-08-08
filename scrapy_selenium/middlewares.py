@@ -29,7 +29,7 @@ class SeleniumMiddleware:
     default_proxy = ''
 
     def __init__(self, driver_name: str, driver_executable_path: str, grid_url: str, driver_arguments: Iterable[str],
-        browser_executable_path: str, max_concurrent_driver: int=8, command_executor: str):
+        browser_executable_path: str, command_executor: str, max_concurrent_driver: int=8):
         """Initialize the selenium webdriver
 
         Parameters
